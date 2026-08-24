@@ -23,7 +23,7 @@ jobs:
 
       # setup-python не нужен: версию питона держит .python-version, и uv
       # сам ставит её при первом uv sync.
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
 
       # Node нужен инструментам контракта: компилятор TypeSpec и
       # генератор python-моделей из OpenAPI — оба npm-пакеты. Само
