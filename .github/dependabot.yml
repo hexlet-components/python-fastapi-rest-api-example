@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Экосистема uv покрывает и pyproject.toml, и uv.lock. Отдельный блок pip на
+  # том же каталоге давал бы вторую пачку PR на те же зависимости.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    labels: ["dependencies", "automated"]
+    commit-message:
+      prefix: "chore"
+    groups:
+      uv-all:
+        patterns: ["*"]
+
+  # Инструменты контракта: компилятор TypeSpec и генератор моделей.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    labels: ["dependencies", "automated"]
+    commit-message:
+      prefix: "chore"
+    groups:
+      npm-all:
+        patterns: ["*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    labels: ["dependencies", "automated"]
+    commit-message:
+      prefix: "chore"
+    groups:
+      github-actions-all:
+        patterns: ["*"]

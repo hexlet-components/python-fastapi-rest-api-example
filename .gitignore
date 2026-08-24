@@ -1,0 +1,19 @@
+*.egg-info
+__pycache__
+dist/
+*.pyc
+.venv/
+.coverage
+.pytest_cache/
+*.sqlite
+.ruff_cache/
+node_modules/
+.env
+
+# кеш и отчёты schemathesis (make contract-test)
+.schemathesis/
+.hypothesis/
+schemathesis-report/
+
+# базовая спека для oasdiff в CI
+.oasdiff/

@@ -1,0 +1,50 @@
+name: Python CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Пуш в ветку с открытым PR запускает проверки дважды. Прошлый прогон
+# отменяется, кроме main: там история прогонов нужна целиком.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # setup-python не нужен: версию питона держит .python-version, и uv
+      # сам ставит её при первом uv sync.
+      - uses: astral-sh/setup-uv@v10
+
+      # Node нужен инструментам контракта: компилятор TypeSpec и
+      # генератор python-моделей из OpenAPI — оба npm-пакеты. Само
+      # приложение о node не знает.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install
+        run: make install
+      - name: Run linter
+        run: make lint
+      # Модели порождены контрактом, поэтому расхождение с закоммиченными
+      # значит, что контракт правили без перегенерации — и код опирается
+      # на схему, которой в спеке уже нет.
+      - name: Check the generated code
+        run: make generate-check
+      # Схема без миграции — молчаливая поломка: код ждёт колонку,
+      # которой в базе не появится.
+      - name: Check migrations
+        run: make migration-check
+      - name: Run tests
+        run: make test-coverage

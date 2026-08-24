@@ -1,0 +1,29 @@
+name: Image
+
+# Проверяет собранный образ, а не исходники. Часть поломок видна только в
+# боевой установке: сиды тянут faker из группы dev, которой в образе нет,
+# и со статическим импортом такой образ не поднялся бы вовсе.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and smoke-test the image
+        run: make smoke-test

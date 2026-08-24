@@ -1,0 +1,40 @@
+name: OpenAPI Diff
+
+# Информационный шаг: показывает в логе PR, что изменилось в контракте и
+# есть ли ломающие правки. Сборку намеренно не роняет — спека нигде не
+# опубликована, и жёсткий гейт обещал бы совместимость, которой
+# репозиторий не даёт. Когда спека станет публичной, достаточно убрать
+# continue-on-error.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Файл кладётся в рабочую копию, а не в /tmp: oasdiff запускается
+      # docker-действием, и внутрь контейнера монтируется только
+      # workspace — из /tmp базовую спеку он не увидит.
+      - name: Extract the base version of the spec
+        run: |
+          mkdir -p .oasdiff
+          git show "origin/${{ github.base_ref }}:openapi/openapi.v1.json" \
+            > .oasdiff/base.json \
+            || cp openapi/openapi.v1.json .oasdiff/base.json
+          test -s .oasdiff/base.json
+
+      - name: Report breaking changes
+        continue-on-error: true
+        uses: oasdiff/oasdiff-action/breaking@main
+        with:
+          base: .oasdiff/base.json
+          revision: openapi/openapi.v1.json

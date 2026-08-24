@@ -1,0 +1,12 @@
+# Линтер до коммита, тесты до пуша: те же команды, что гоняет CI, поэтому
+# красный прогон виден до пуша, а не после.
+
+pre-commit:
+  commands:
+    lint:
+      run: make lint
+
+pre-push:
+  commands:
+    test:
+      run: make test
