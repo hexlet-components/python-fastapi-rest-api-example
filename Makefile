@@ -2,7 +2,7 @@ PORT ?= 8000
 
 install:
 	uv sync
-	npm ci
+	pnpm install --frozen-lockfile
 
 # Первичная настройка: зависимости и .env из шаблона.
 setup: install env
@@ -46,13 +46,13 @@ routes:
 # порождённый из него артефакт, который коммитится: по нему генерируются
 # модели, его же отдаёт приложение и по нему идут контрактные тесты.
 generate-openapi:
-	npx tsp compile .
+	pnpm exec tsp compile .
 
 # Модели из спеки. Путь начинается с ./ намеренно: без этого генератор
 # принимает его за адрес проекта в реестре Hey API и падает на разборе.
 generate-models:
-	npx openapi-python -i ./openapi/openapi.v1.json -o ./app/types/handlers/v1 -p pydantic
-	npx openapi-python -i ./openapi/openapi.v2.json -o ./app/types/handlers/v2 -p pydantic
+	pnpm exec openapi-python -i ./openapi/openapi.v1.json -o ./app/types/handlers/v1 -p pydantic
+	pnpm exec openapi-python -i ./openapi/openapi.v2.json -o ./app/types/handlers/v2 -p pydantic
 
 generate-types: generate-openapi generate-models
 
@@ -101,7 +101,7 @@ smoke-test:
 # обновиться сразу и локально.
 deps-update:
 	uv lock --upgrade
-	npx npm-check-updates -u
+	pnpm dlx npm-check-updates -u
 
 .PHONY: install setup env dev start test test-coverage lint lint-fix routes \
 	generate-openapi generate-models generate-types generate-check \

@@ -4,15 +4,16 @@
   "description": "Инструменты контракта: TypeSpec и генератор python-кода из OpenAPI. Само приложение на питоне и в этих зависимостях не нуждается.",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=26"
   },
   "devDependencies": {
     "@hey-api/openapi-python": "^0.0.24",
-    "@typespec/compiler": "^1.15.0",
-    "@typespec/http": "^1.15.0",
-    "@typespec/openapi": "^1.15.0",
-    "@typespec/openapi3": "^1.15.0",
-    "@typespec/rest": "^0.85.0",
-    "@typespec/versioning": "^0.85.0"
-  }
+    "@typespec/compiler": "^1.16.0",
+    "@typespec/http": "^1.16.0",
+    "@typespec/openapi": "^1.16.0",
+    "@typespec/openapi3": "^1.16.0",
+    "@typespec/rest": "^0.86.0",
+    "@typespec/versioning": "^0.86.0"
+  },
+  "packageManager": "pnpm@12.6.0"
 }
