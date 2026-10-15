@@ -30,6 +30,3 @@ async def create(
         raise Unauthorized("Invalid email or password")
 
     return contract.TokenInfo(token=create_token(user.id, settings))
-
-
-handlers = {"tokensCreate": create}

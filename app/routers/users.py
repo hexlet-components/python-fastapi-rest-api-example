@@ -154,15 +154,3 @@ async def destroy(session: SessionDep, user_id: UserId) -> Response:
     await session.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# Обработчики связываются с операциями контракта по идентификатору:
-# маршруты вешает app/glue.py, читая спеку. Забытая или лишняя операция
-# роняет приложение на старте.
-handlers = {
-    "usersIndex": index,
-    "usersShow": show,
-    "usersCreate": create,
-    "usersUpdate": replace,
-    "usersDestroy": destroy,
-}

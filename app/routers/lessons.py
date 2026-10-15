@@ -138,12 +138,3 @@ async def destroy(
     await session.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-handlers = {
-    "coursesLessonsIndex": index,
-    "coursesLessonsShow": show,
-    "coursesLessonsCreate": create,
-    "coursesLessonsUpdate": replace,
-    "coursesLessonsDestroy": destroy,
-}

@@ -120,12 +120,3 @@ async def destroy(session: SessionDep, user_id: UserId) -> Response:
     await session.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-handlers = {
-    "usersIndex": index,
-    "usersShow": show,
-    "usersCreate": create,
-    "usersUpdate": replace,
-    "usersDestroy": destroy,
-}
