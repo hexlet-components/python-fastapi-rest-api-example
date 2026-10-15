@@ -1,13 +1,13 @@
 from typing import Annotated
 
 from fastapi import HTTPException, Query, Response, status
-from sqlmodel import col, func, select
+from sqlmodel import col, select
 
 from app.db.models import CourseLesson
 from app.dependencies import SessionDep
 from app.lib.changes import changes
 from app.lib.identifiers import ResourceId
-from app.lib.pagination import Paging
+from app.lib.pagination import fetch_page
 from app.policies import CoursePolicy
 from app.routers.courses import find_course
 from app.security import CurrentUserDep
@@ -56,33 +56,24 @@ async def index(
     course_id: CourseId,
     query: Annotated[contract.CoursesLessonsIndexQuery, Query()],
 ) -> contract.CourseLessonPage:
-    paging = Paging.of(query)
-    scope = col(CourseLesson.course_id) == course_id
-    lessons = (
-        await session.exec(
-            select(CourseLesson)
-            .where(scope)
-            .order_by(col(CourseLesson.id))
-            .limit(paging.limit)
-            .offset(paging.offset)
-        )
-    ).all()
-    # Счёт по тому же условию, что и выборка: total — это число уроков
-    # этого курса, а не всех.
-    total = (
-        await session.scalar(
-            select(func.count()).select_from(CourseLesson).where(scope)
-        )
-    ) or 0
+    # Общее число библиотека считает по тому же условию, что и выборку:
+    # total — это число уроков этого курса, а не всех.
+    page = await fetch_page(
+        session,
+        select(CourseLesson)
+        .where(col(CourseLesson.course_id) == course_id)
+        .order_by(col(CourseLesson.id)),
+        query,
+    )
 
     return contract.CourseLessonPage(
         data=[
             contract.CourseLesson.model_validate(
                 lesson, from_attributes=True, by_name=True
             )
-            for lesson in lessons
+            for lesson in page.items
         ],
-        meta=paging.meta(total),
+        meta=contract.PageMeta.model_validate(page, from_attributes=True),
     )
 
 

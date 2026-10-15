@@ -8,9 +8,9 @@ from app.db.projections import PUBLIC_USER_COLUMNS_V2
 from app.dependencies import SessionDep, SettingsDep
 from app.lib.changes import changes
 from app.lib.identifiers import ResourceId
-from app.lib.pagination import Paging
+from app.lib.pagination import fetch_page
 from app.lib.password import hash_password
-from app.routers.users import count_users, find_public_user
+from app.routers.users import find_public_user
 from app.types.handlers.v2 import pydantic_gen as contract
 from app.validators import users as validator
 
@@ -30,24 +30,20 @@ async def index(
     session: SessionDep,
     query: Annotated[contract.UsersIndexQuery, Query()],
 ) -> contract.UserPage:
-    paging = Paging.of(query)
-    rows = (
-        await session.exec(
-            select(*PUBLIC_USER_COLUMNS_V2)
-            .order_by(col(User.id))
-            .limit(paging.limit)
-            .offset(paging.offset)
-        )
-    ).all()
+    page = await fetch_page(
+        session,
+        select(*PUBLIC_USER_COLUMNS_V2).order_by(col(User.id)),
+        query,
+    )
 
     return contract.UserPage(
         data=[
             contract.User.model_validate(
                 row, from_attributes=True, by_name=True
             )
-            for row in rows
+            for row in page.items
         ],
-        meta=paging.meta(await count_users(session)),
+        meta=contract.PageMeta.model_validate(page, from_attributes=True),
     )
 
 

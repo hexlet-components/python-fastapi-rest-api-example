@@ -11,7 +11,7 @@ from app.db.projections import PUBLIC_USER_COLUMNS
 from app.dependencies import SessionDep, SettingsDep
 from app.lib.changes import changes
 from app.lib.identifiers import ResourceId
-from app.lib.pagination import Paging
+from app.lib.pagination import fetch_page
 from app.lib.password import hash_password
 from app.types.handlers.v1 import pydantic_gen as contract
 from app.validators import users as validator
@@ -47,34 +47,26 @@ async def find_public_user(
     return row
 
 
-async def count_users(session: SessionDep) -> int:
-    return await session.scalar(select(func.count()).select_from(User)) or 0
-
-
 async def index(
     session: SessionDep,
     query: Annotated[contract.UsersIndexQuery, Query()],
 ) -> contract.UserPage:
-    paging = Paging.of(query)
-    rows = (
-        await session.exec(
-            select(*PUBLIC_USER_COLUMNS)
-            # Порядок задан явно: без него база его не обещает, и
-            # «первая» запись до правки и после — не обязательно одна.
-            .order_by(col(User.id))
-            .limit(paging.limit)
-            .offset(paging.offset)
-        )
-    ).all()
+    page = await fetch_page(
+        session,
+        # Порядок задан явно: без него база его не обещает, и «первая»
+        # запись до правки и после — не обязательно одна.
+        select(*PUBLIC_USER_COLUMNS).order_by(col(User.id)),
+        query,
+    )
 
     return contract.UserPage(
         data=[
             contract.User.model_validate(
                 row, from_attributes=True, by_name=True
             )
-            for row in rows
+            for row in page.items
         ],
-        meta=paging.meta(await count_users(session)),
+        meta=contract.PageMeta.model_validate(page, from_attributes=True),
     )
 
 

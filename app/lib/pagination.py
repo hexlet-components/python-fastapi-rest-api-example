@@ -1,6 +1,9 @@
-from dataclasses import dataclass
-from math import ceil
-from typing import Protocol
+from typing import Any, Protocol
+
+from fastapi_pagination import Page, Params
+from fastapi_pagination.ext.sqlmodel import apaginate
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel.sql.expression import Select, SelectOfScalar
 
 
 class PageQuery(Protocol):
@@ -12,36 +15,23 @@ class PageQuery(Protocol):
     """
 
     page: int | None
-    per_page: int | None
+    size: int | None
 
 
-@dataclass(frozen=True)
-class Paging:
-    page: int
-    per_page: int
+async def fetch_page(
+    session: AsyncSession,
+    statement: Select[Any] | SelectOfScalar[Any],
+    query: PageQuery,
+) -> Page[Any]:
+    """Страница выборки: срез и общее число считает fastapi-pagination.
 
-    @classmethod
-    def of(cls, query: PageQuery) -> Paging:
-        return cls(page=query.page or 1, per_page=query.per_page or 10)
-
-    @property
-    def limit(self) -> int:
-        return self.per_page
-
-    @property
-    def offset(self) -> int:
-        return (self.page - 1) * self.per_page
-
-    def meta(self, total: int) -> dict[str, int]:
-        """Метаданные страницы под псевдонимами контракта.
-
-        Возвращается отображение, а не готовая модель: у каждой версии
-        контракта свой сгенерированный PageMeta, и общая на все версии
-        модель не подошла бы ни одной.
-        """
-        return {
-            "page": self.page,
-            "perPage": self.per_page,
-            "total": total,
-            "totalPages": ceil(total / self.per_page),
-        }
+    Форма страницы (`page`, `size`, `total`, `pages`) задана контрактом
+    и совпадает с формой библиотеки, поэтому её метаданные уходят в
+    ответ как есть. Порядок в выборке должен быть задан явно: без него
+    база его не обещает, и страницы могут пересекаться.
+    """
+    return await apaginate(
+        session,
+        statement,
+        params=Params(page=query.page or 1, size=query.size or 10),
+    )

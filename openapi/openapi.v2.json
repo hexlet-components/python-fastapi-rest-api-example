@@ -29,7 +29,7 @@
             "explode": false
           },
           {
-            "name": "perPage",
+            "name": "size",
             "in": "query",
             "required": false,
             "schema": {
@@ -474,7 +474,7 @@
             "explode": false
           },
           {
-            "name": "perPage",
+            "name": "size",
             "in": "query",
             "required": false,
             "schema": {
@@ -997,7 +997,7 @@
             "explode": false
           },
           {
-            "name": "perPage",
+            "name": "size",
             "in": "query",
             "required": false,
             "schema": {
@@ -1633,16 +1633,16 @@
         "type": "object",
         "required": [
           "page",
-          "perPage",
+          "size",
           "total",
-          "totalPages"
+          "pages"
         ],
         "properties": {
           "page": {
             "type": "integer",
             "format": "int32"
           },
-          "perPage": {
+          "size": {
             "type": "integer",
             "format": "int32"
           },
@@ -1650,7 +1650,7 @@
             "type": "integer",
             "format": "int32"
           },
-          "totalPages": {
+          "pages": {
             "type": "integer",
             "format": "int32"
           }

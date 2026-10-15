@@ -15,16 +15,16 @@ async def test_index(client, auth_header, user):
 
 async def test_index_paginates(client, auth_header, user):
     res = await client.get(
-        "/users", params={"page": 2, "perPage": 2}, headers=auth_header(user.id)
+        "/users", params={"page": 2, "size": 2}, headers=auth_header(user.id)
     )
 
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["meta"] == {
         "page": 2,
-        "perPage": 2,
+        "size": 2,
         "total": 3,
-        "totalPages": 2,
+        "pages": 2,
     }
     assert len(body["data"]) == 1
 

@@ -1,14 +1,14 @@
 from typing import Annotated
 
 from fastapi import Header, HTTPException, Query, Response, status
-from sqlmodel import col, delete, func, select
+from sqlmodel import col, delete, select
 
 from app.db.models import Course, CourseLesson
 from app.dependencies import SessionDep
 from app.lib.changes import changes
 from app.lib.etag import ensure_matches, entity_tag
 from app.lib.identifiers import ResourceId
-from app.lib.pagination import Paging
+from app.lib.pagination import fetch_page
 from app.policies import CoursePolicy
 from app.security import CurrentUserDep
 from app.types.handlers.v1 import pydantic_gen as contract
@@ -53,27 +53,18 @@ async def index(
     session: SessionDep,
     query: Annotated[contract.CoursesIndexQuery, Query()],
 ) -> contract.CoursePage:
-    paging = Paging.of(query)
-    courses = (
-        await session.exec(
-            select(Course)
-            .order_by(col(Course.id))
-            .limit(paging.limit)
-            .offset(paging.offset)
-        )
-    ).all()
-    total = (
-        await session.scalar(select(func.count()).select_from(Course))
-    ) or 0
+    page = await fetch_page(
+        session, select(Course).order_by(col(Course.id)), query
+    )
 
     return contract.CoursePage(
         data=[
             contract.Course.model_validate(
                 course, from_attributes=True, by_name=True
             )
-            for course in courses
+            for course in page.items
         ],
-        meta=paging.meta(total),
+        meta=contract.PageMeta.model_validate(page, from_attributes=True),
     )
 
 
