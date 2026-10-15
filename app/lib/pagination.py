@@ -20,7 +20,7 @@ class PageQuery(Protocol):
 
 async def fetch_page(
     session: AsyncSession,
-    statement: Select[Any] | SelectOfScalar[Any],
+    statement: Select | SelectOfScalar,
     query: PageQuery,
 ) -> Page[Any]:
     """Страница выборки: срез и общее число считает fastapi-pagination.
