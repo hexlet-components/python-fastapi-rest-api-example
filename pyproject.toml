@@ -21,6 +21,8 @@ dependencies = [
     "sqlmodel>=0.0.47",
     "fastapi-problem>=0.12.1",
     "fastapi-pagination>=0.16.1",
+    "slowapi>=0.1.10",
+    "limits>=5.8.0",
 ]
 
 [dependency-groups]

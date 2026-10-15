@@ -1,10 +1,7 @@
 import hashlib
-import time
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-
-from app.lib.problems import TooManyRequests, to_response
 
 CACHEABLE_METHODS = ("GET", "HEAD")
 
@@ -90,89 +87,3 @@ class ETagMiddleware:
         # Валидатор слабый: сравнение идёт по содержимому ответа, а не по
         # точному представлению, и заголовки в него не входят.
         return f'W/"{hashlib.sha1(body, usedforsecurity=False).hexdigest()}"'
-
-
-WINDOWS = {"second": 1, "minute": 60, "hour": 3600}
-
-
-def parse_rate_limit(value: str) -> tuple[int, int]:
-    """Лимит из конфига: «<число>/<единица времени>»."""
-    limit, _, unit = value.partition("/")
-    if unit not in WINDOWS:
-        raise ValueError(
-            f"лимит задаётся как 100/minute, единицы: "
-            f"{', '.join(WINDOWS)}; получено {value!r}"
-        )
-    return int(limit), WINDOWS[unit]
-
-
-class RateLimitMiddleware:
-    """Ограничитель частоты запросов на адрес клиента.
-
-    Окно фиксированное: счётчик на адрес обнуляется, когда окно
-    закончилось. Готовая библиотека сюда не годится — общий для всех
-    маршрутов ограничитель ищет обработчик по списку маршрутов
-    приложения, а fastapi с некоторых версий хранит там ссылки на
-    роутеры, а не сами операции. Ограничитель молча пропускал всё, и
-    объявленный в контракте 429 не наступал никогда.
-
-    Счётчик живёт в памяти процесса, то есть считает по экземпляру. За
-    несколькими экземплярами нужен общий счётчик — redis или сам
-    балансировщик.
-    """
-
-    def __init__(self, app: ASGIApp, *, rate_limit: str) -> None:
-        self.app = app
-        self.limit, self.window = parse_rate_limit(rate_limit)
-        self.counters: dict[str, tuple[float, int]] = {}
-
-    async def __call__(
-        self, scope: Scope, receive: Receive, send: Send
-    ) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        # Адрес берётся из соединения, а не из заголовка
-        # X-Forwarded-For: заголовок присылает клиент, и по нему лимит
-        # обходится подстановкой чужого адреса. За прокси доверять можно
-        # только тому заголовку, который прокси сам и перезаписывает.
-        client = scope.get("client")
-        key = client[0] if client else "unknown"
-
-        if self._exceeded(key):
-            response = to_response(
-                TooManyRequests(
-                    f"Rate limit exceeded: {self.limit} per {self.window} s",
-                    headers={"Retry-After": str(self.window)},
-                )
-            )
-            await response(scope, receive, send)
-            return
-
-        await self.app(scope, receive, send)
-
-    def _exceeded(self, key: str) -> bool:
-        now = time.monotonic()
-        started, count = self.counters.get(key, (now, 0))
-
-        if now - started >= self.window:
-            started, count = now, 0
-
-        self.counters[key] = (started, count + 1)
-        self._forget_stale(now)
-
-        return count >= self.limit
-
-    def _forget_stale(self, now: float) -> None:
-        # Ключей столько же, сколько адресов, и без уборки словарь растёт
-        # всё время работы процесса. Порог, а не проход на каждый запрос:
-        # уборка стоит обхода всего словаря.
-        if len(self.counters) < 1000:
-            return
-
-        self.counters = {
-            key: value
-            for key, value in self.counters.items()
-            if now - value[0] < self.window
-        }

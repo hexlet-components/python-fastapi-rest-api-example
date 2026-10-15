@@ -37,6 +37,15 @@ def test_app_refuses_to_boot_with_a_short_secret(monkeypatch, clean_settings):
         create_app()
 
 
+def test_app_refuses_to_boot_with_a_malformed_rate_limit(
+    monkeypatch, clean_settings
+):
+    monkeypatch.setenv("RATE_LIMIT", "oops")
+
+    with pytest.raises(ValidationError, match="rate_limit"):
+        create_app()
+
+
 async def test_openapi_document_and_reference_page_are_served(client):
     document = await client.get("/openapi.json")
     assert document.status_code == 200
@@ -211,6 +220,7 @@ async def test_too_many_requests_are_rejected_in_the_same_format():
     assert 429 in statuses
     assert last.headers["content-type"].startswith("application/problem+json")
     assert last.json()["status"] == 429
+    assert int(last.headers["retry-after"]) > 0
 
 
 def test_a_forgotten_operation_stops_the_app(monkeypatch):

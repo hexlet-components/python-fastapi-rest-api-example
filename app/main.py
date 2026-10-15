@@ -5,6 +5,8 @@ import secure
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app import observability
 from app.contract import VERSIONS, document
@@ -15,7 +17,8 @@ from app.db.session import (
 )
 from app.glue import register_operations
 from app.lib.problems import register_handlers
-from app.middleware import ETagMiddleware, RateLimitMiddleware
+from app.lib.rate_limit import create_limiter, too_many_requests
+from app.middleware import ETagMiddleware
 from app.routers import index as v1
 from app.routers.v2 import index as v2
 from app.security import current_user_id
@@ -88,7 +91,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_handlers(app)
 
-    app.add_middleware(RateLimitMiddleware, rate_limit=settings.rate_limit)
+    app.state.limiter = create_limiter(settings)
+    app.add_exception_handler(RateLimitExceeded, too_many_requests)
+    app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(ETagMiddleware)
     app.add_middleware(
         CORSMiddleware,
