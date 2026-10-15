@@ -9,7 +9,6 @@ from app.lib.changes import changes
 from app.lib.etag import ensure_matches, entity_tag
 from app.lib.identifiers import ResourceId
 from app.lib.pagination import Paging
-from app.lib.serialization import to_schema
 from app.policies import CoursePolicy
 from app.security import CurrentUserDep
 from app.types.handlers.v1 import pydantic_gen as contract
@@ -68,7 +67,12 @@ async def index(
     ) or 0
 
     return contract.CoursePage(
-        data=[to_schema(contract.Course, course) for course in courses],
+        data=[
+            contract.Course.model_validate(
+                course, from_attributes=True, by_name=True
+            )
+            for course in courses
+        ],
         meta=paging.meta(total),
     )
 
@@ -80,7 +84,9 @@ async def show(
     # Метка версии ставится обработчиком, а не считается по телу ответа:
     # клиенту нужен валидатор, который он потом пришлёт в If-Match.
     response.headers["etag"] = entity_tag(course.updated_at)
-    return to_schema(contract.Course, course)
+    return contract.Course.model_validate(
+        course, from_attributes=True, by_name=True
+    )
 
 
 async def create(
@@ -94,7 +100,9 @@ async def create(
     session.add(course)
     await session.commit()
 
-    return to_schema(contract.Course, course)
+    return contract.Course.model_validate(
+        course, from_attributes=True, by_name=True
+    )
 
 
 async def replace(
@@ -116,7 +124,9 @@ async def replace(
         await session.refresh(course)
 
     response.headers["etag"] = entity_tag(course.updated_at)
-    return to_schema(contract.Course, course)
+    return contract.Course.model_validate(
+        course, from_attributes=True, by_name=True
+    )
 
 
 async def destroy(

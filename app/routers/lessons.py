@@ -8,7 +8,6 @@ from app.dependencies import SessionDep
 from app.lib.changes import changes
 from app.lib.identifiers import ResourceId
 from app.lib.pagination import Paging
-from app.lib.serialization import to_schema
 from app.policies import CoursePolicy
 from app.routers.courses import find_course
 from app.security import CurrentUserDep
@@ -77,7 +76,12 @@ async def index(
     ) or 0
 
     return contract.CourseLessonPage(
-        data=[to_schema(contract.CourseLesson, lesson) for lesson in lessons],
+        data=[
+            contract.CourseLesson.model_validate(
+                lesson, from_attributes=True, by_name=True
+            )
+            for lesson in lessons
+        ],
         meta=paging.meta(total),
     )
 
@@ -86,7 +90,9 @@ async def show(
     session: SessionDep, course_id: CourseId, lesson_id: LessonId
 ) -> contract.CourseLesson:
     lesson = await _find_lesson(session, course_id, lesson_id)
-    return to_schema(contract.CourseLesson, lesson)
+    return contract.CourseLesson.model_validate(
+        lesson, from_attributes=True, by_name=True
+    )
 
 
 async def create(
@@ -101,7 +107,9 @@ async def create(
     session.add(lesson)
     await session.commit()
 
-    return to_schema(contract.CourseLesson, lesson)
+    return contract.CourseLesson.model_validate(
+        lesson, from_attributes=True, by_name=True
+    )
 
 
 async def replace(
@@ -121,7 +129,9 @@ async def replace(
         await session.commit()
         await session.refresh(lesson)
 
-    return to_schema(contract.CourseLesson, lesson)
+    return contract.CourseLesson.model_validate(
+        lesson, from_attributes=True, by_name=True
+    )
 
 
 async def destroy(

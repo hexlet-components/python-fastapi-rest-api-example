@@ -13,7 +13,6 @@ from app.lib.changes import changes
 from app.lib.identifiers import ResourceId
 from app.lib.pagination import Paging
 from app.lib.password import hash_password
-from app.lib.serialization import to_schema
 from app.types.handlers.v1 import pydantic_gen as contract
 from app.validators import users as validator
 
@@ -69,13 +68,22 @@ async def index(
     ).all()
 
     return contract.UserPage(
-        data=[to_schema(contract.User, row) for row in rows],
+        data=[
+            contract.User.model_validate(
+                row, from_attributes=True, by_name=True
+            )
+            for row in rows
+        ],
         meta=paging.meta(await count_users(session)),
     )
 
 
 async def show(session: SessionDep, user_id: UserId) -> contract.User:
-    return to_schema(contract.User, await find_public_user(session, user_id))
+    return contract.User.model_validate(
+        await find_public_user(session, user_id),
+        from_attributes=True,
+        by_name=True,
+    )
 
 
 async def create(
@@ -94,7 +102,9 @@ async def create(
     session.add(user)
     await session.commit()
 
-    return to_schema(contract.User, user)
+    return contract.User.model_validate(
+        user, from_attributes=True, by_name=True
+    )
 
 
 async def replace(
@@ -115,14 +125,20 @@ async def replace(
         )
 
     if not values:
-        return to_schema(contract.User, existing)
+        return contract.User.model_validate(
+            existing, from_attributes=True, by_name=True
+        )
 
     await session.exec(
         update(User).where(col(User.id) == user_id).values(**values)
     )
     await session.commit()
 
-    return to_schema(contract.User, await find_public_user(session, user_id))
+    return contract.User.model_validate(
+        await find_public_user(session, user_id),
+        from_attributes=True,
+        by_name=True,
+    )
 
 
 async def destroy(session: SessionDep, user_id: UserId) -> Response:
