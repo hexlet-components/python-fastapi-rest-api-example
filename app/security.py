@@ -2,22 +2,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Request, Security, status
+from fastapi import Depends, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import col, select
 
 from app.db.models import User
 from app.dependencies import SessionDep, SettingsDep
-from app.lib.problems import problem_response
+from app.lib.problems import Unauthorized
 from app.settings import Settings
-
-UNAUTHORIZED_HEADERS = {"WWW-Authenticate": "Bearer"}
-
-
-class Unauthorized(Exception):
-    def __init__(self, detail: str) -> None:
-        super().__init__(detail)
-        self.detail = detail
 
 
 class BearerAuth(HTTPBearer):
@@ -86,14 +78,3 @@ async def current_user_id(
 
 
 CurrentUserDep = Annotated[int, Depends(current_user_id)]
-
-
-async def unauthorized_handler(request: Request, error: Exception):
-    # Фреймворк передаёт обработчику базовый Exception: тип ошибки он
-    # выбирает по регистрации, а не по сигнатуре.
-    assert isinstance(error, Unauthorized)  # noqa: S101
-    return problem_response(
-        status.HTTP_401_UNAUTHORIZED,
-        error.detail,
-        headers=UNAUTHORIZED_HEADERS,
-    )

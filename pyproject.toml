@@ -19,6 +19,7 @@ dependencies = [
     "secure>=2.0.1",
     "sqlalchemy[asyncio]>=2.0.54",
     "sqlmodel>=0.0.47",
+    "fastapi-problem>=0.12.1",
 ]
 
 [dependency-groups]

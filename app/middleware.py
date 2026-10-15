@@ -4,7 +4,7 @@ import time
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.lib.problems import problem_response
+from app.lib.problems import TooManyRequests, to_response
 
 CACHEABLE_METHODS = ("GET", "HEAD")
 
@@ -141,10 +141,11 @@ class RateLimitMiddleware:
         key = client[0] if client else "unknown"
 
         if self._exceeded(key):
-            response = problem_response(
-                429,
-                f"Rate limit exceeded: {self.limit} per {self.window} s",
-                headers={"Retry-After": str(self.window)},
+            response = to_response(
+                TooManyRequests(
+                    f"Rate limit exceeded: {self.limit} per {self.window} s",
+                    headers={"Retry-After": str(self.window)},
+                )
             )
             await response(scope, receive, send)
             return

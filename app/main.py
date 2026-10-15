@@ -18,7 +18,7 @@ from app.lib.problems import register_handlers
 from app.middleware import ETagMiddleware, RateLimitMiddleware
 from app.routers import index as v1
 from app.routers.v2 import index as v2
-from app.security import Unauthorized, current_user_id, unauthorized_handler
+from app.security import current_user_id
 from app.settings import Settings, get_settings
 from app.telemetry import setup_telemetry
 
@@ -87,7 +87,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     register_handlers(app)
-    app.add_exception_handler(Unauthorized, unauthorized_handler)
 
     app.add_middleware(RateLimitMiddleware, rate_limit=settings.rate_limit)
     app.add_middleware(ETagMiddleware)

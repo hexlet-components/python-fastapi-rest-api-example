@@ -1,10 +1,10 @@
-from fastapi import HTTPException, status
 from sqlmodel import col, select
 
 from app.db.models import User
 from app.dependencies import SessionDep, SettingsDep
 from app.lib.password import verify_password
-from app.security import UNAUTHORIZED_HEADERS, create_token
+from app.lib.problems import Unauthorized
+from app.security import create_token
 from app.types.handlers.v1 import pydantic_gen as contract
 
 
@@ -27,11 +27,7 @@ async def create(
         or user.id is None
         or not await verify_password(data.password, user.password_digest)
     ):
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Invalid email or password",
-            headers=UNAUTHORIZED_HEADERS,
-        )
+        raise Unauthorized("Invalid email or password")
 
     return contract.TokenInfo(token=create_token(user.id, settings))
 

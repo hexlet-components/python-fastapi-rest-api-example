@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 from app.main import create_app
@@ -89,6 +90,7 @@ async def test_errors_are_rendered_as_problem_details(client, auth_header):
     assert res.status_code == 404
     assert res.headers["content-type"].startswith("application/problem+json")
     assert res.json() == {
+        "type": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
         "title": "Not Found",
         "status": 404,
         "detail": "Not Found",
@@ -245,3 +247,35 @@ def test_an_operation_outside_the_contract_stops_the_app(monkeypatch):
 
     with pytest.raises(RuntimeError, match="usersArchive"):
         create_app()
+
+
+async def test_a_missing_token_is_401_with_the_scheme(client):
+    """Нет токена — 401 с указанием схемы, а не 403."""
+    res = await client.get("/users")
+
+    assert res.status_code == 401, res.text
+    assert res.headers["www-authenticate"] == "Bearer"
+    assert res.headers["content-type"].startswith("application/problem+json")
+
+
+async def test_an_unhandled_error_leaks_nothing(app):
+    """Текст исключения в тело 500 не попадает.
+
+    Библиотека ошибок по умолчанию кладёт его в `detail`, а он может
+    содержать фрагмент запроса к базе.
+    """
+
+    async def boom() -> None:
+        raise RuntimeError("SELECT password_digest FROM users")
+
+    app.add_api_route("/boom", boom)
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        res = await client.get("/boom")
+
+    assert res.status_code == 500
+    assert res.headers["content-type"].startswith("application/problem+json")
+    assert "password_digest" not in res.text
+    assert res.json()["title"] == "Internal Server Error"
