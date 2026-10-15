@@ -1,11 +1,16 @@
-from typing import Any, Callable
+from collections.abc import Callable, Mapping
+from typing import Any, cast
 
 from fastapi import FastAPI, Response, Security
 
 from app.contract import document
 
-Handlers = dict[str, Callable[..., Any]]
-SecurityHandlers = dict[str, Callable[..., Any]]
+# Набор обработчиков версии приходит как `Operations` — TypedDict,
+# напечатанный из контракта (scripts/operations.py). Для проверки типов
+# это Mapping[str, object]; что значения вызываемые, видно из его же
+# объявления, а здесь они приводятся один раз.
+Handlers = Mapping[str, object]
+SecurityHandlers = Mapping[str, Callable[..., Any]]
 
 
 def _response_model(handler: Callable[..., Any], status: int):
@@ -85,6 +90,7 @@ def register_operations(
         )
 
     for operation_id, (path, method, operation) in operations.items():
+        handler = cast(Callable[..., Any], handlers[operation_id])
         status = _success_status(operation)
         dependencies = [
             Security(security_handlers[scheme])
@@ -94,10 +100,10 @@ def register_operations(
 
         app.add_api_route(
             f"{prefix}{path}",
-            handlers[operation_id],
+            handler,
             methods=[method.upper()],
             status_code=status,
-            response_model=_response_model(handlers[operation_id], status),
+            response_model=_response_model(handler, status),
             dependencies=dependencies,
             operation_id=operation_id,
             summary=operation.get("summary"),

@@ -1,6 +1,9 @@
-from typing import Annotated
+from collections.abc import Sequence
+from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, Response, status
+from sqlalchemy import select as select_columns
+from sqlalchemy.orm import Mapped
 from sqlmodel import col, delete, func, select, update
 
 from app.db.models import Course, User
@@ -8,16 +11,19 @@ from app.db.projections import PUBLIC_USER_COLUMNS
 from app.dependencies import SessionDep, SettingsDep
 from app.lib.changes import changes
 from app.lib.identifiers import ResourceId
-from app.lib.pagination import Paging
+from app.lib.pagination import fetch_page
 from app.lib.password import hash_password
-from app.lib.serialization import to_schema
 from app.types.handlers.v1 import pydantic_gen as contract
 from app.validators import users as validator
 
 UserId = ResourceId
 
 
-async def find_public_user(session: SessionDep, user_id: int, columns=None):
+async def find_public_user(
+    session: SessionDep,
+    user_id: int,
+    columns: Sequence[Mapped[Any]] | None = None,
+):
     """Пользователь в публичной проекции.
 
     Проекция вместо строки целиком: рядом лежит password_digest, и
@@ -25,9 +31,13 @@ async def find_public_user(session: SessionDep, user_id: int, columns=None):
     Набор колонок передаётся аргументом — у второй версии контракта он
     свой.
     """
+    # Набор колонок задан списком, а у select из sqlmodel перегрузки
+    # на фиксированное число: список даёт select из sqlalchemy. Он же
+    # исполняется через соединение: session.execute у sqlmodel помечен
+    # устаревшим, потому что для моделей есть exec, а здесь строки.
     row = (
-        await session.exec(
-            select(*(columns or PUBLIC_USER_COLUMNS)).where(
+        await (await session.connection()).execute(
+            select_columns(*(columns or PUBLIC_USER_COLUMNS)).where(
                 col(User.id) == user_id
             )
         )
@@ -37,34 +47,35 @@ async def find_public_user(session: SessionDep, user_id: int, columns=None):
     return row
 
 
-async def count_users(session: SessionDep) -> int:
-    return await session.scalar(select(func.count()).select_from(User))
-
-
 async def index(
     session: SessionDep,
     query: Annotated[contract.UsersIndexQuery, Query()],
 ) -> contract.UserPage:
-    paging = Paging.of(query)
-    rows = (
-        await session.exec(
-            select(*PUBLIC_USER_COLUMNS)
-            # Порядок задан явно: без него база его не обещает, и
-            # «первая» запись до правки и после — не обязательно одна.
-            .order_by(col(User.id))
-            .limit(paging.limit)
-            .offset(paging.offset)
-        )
-    ).all()
+    page = await fetch_page(
+        session,
+        # Порядок задан явно: без него база его не обещает, и «первая»
+        # запись до правки и после — не обязательно одна.
+        select(*PUBLIC_USER_COLUMNS).order_by(col(User.id)),
+        query,
+    )
 
     return contract.UserPage(
-        data=[to_schema(contract.User, row) for row in rows],
-        meta=paging.meta(await count_users(session)),
+        data=[
+            contract.User.model_validate(
+                row, from_attributes=True, by_name=True
+            )
+            for row in page.items
+        ],
+        meta=contract.PageMeta.model_validate(page, from_attributes=True),
     )
 
 
 async def show(session: SessionDep, user_id: UserId) -> contract.User:
-    return to_schema(contract.User, await find_public_user(session, user_id))
+    return contract.User.model_validate(
+        await find_public_user(session, user_id),
+        from_attributes=True,
+        by_name=True,
+    )
 
 
 async def create(
@@ -83,7 +94,9 @@ async def create(
     session.add(user)
     await session.commit()
 
-    return to_schema(contract.User, user)
+    return contract.User.model_validate(
+        user, from_attributes=True, by_name=True
+    )
 
 
 async def replace(
@@ -104,14 +117,20 @@ async def replace(
         )
 
     if not values:
-        return to_schema(contract.User, existing)
+        return contract.User.model_validate(
+            existing, from_attributes=True, by_name=True
+        )
 
     await session.exec(
         update(User).where(col(User.id) == user_id).values(**values)
     )
     await session.commit()
 
-    return to_schema(contract.User, await find_public_user(session, user_id))
+    return contract.User.model_validate(
+        await find_public_user(session, user_id),
+        from_attributes=True,
+        by_name=True,
+    )
 
 
 async def destroy(session: SessionDep, user_id: UserId) -> Response:
@@ -135,15 +154,3 @@ async def destroy(session: SessionDep, user_id: UserId) -> Response:
     await session.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# Обработчики связываются с операциями контракта по идентификатору:
-# маршруты вешает app/glue.py, читая спеку. Забытая или лишняя операция
-# роняет приложение на старте.
-handlers = {
-    "usersIndex": index,
-    "usersShow": show,
-    "usersCreate": create,
-    "usersUpdate": replace,
-    "usersDestroy": destroy,
-}

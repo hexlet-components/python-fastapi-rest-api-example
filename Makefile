@@ -31,6 +31,7 @@ test-coverage:
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
+	uv run ty check
 	$(MAKE) lint-openapi
 
 lint-fix:
@@ -54,7 +55,12 @@ generate-models:
 	pnpm exec openapi-python -i ./openapi/openapi.v1.json -o ./app/types/handlers/v1 -p pydantic
 	pnpm exec openapi-python -i ./openapi/openapi.v2.json -o ./app/types/handlers/v2 -p pydantic
 
-generate-types: generate-openapi generate-models
+# Типы обработчиков печатаются отдельным скриптом: серверного плагина у
+# генератора нет, см. TODO.md.
+generate-operations:
+	uv run python -m scripts.operations
+
+generate-types: generate-openapi generate-models generate-operations
 
 # Проверка, что сгенерированное закоммичено: перегенерируем и падаем,
 # если рабочее дерево изменилось. Ловит и забытый коммит, и сломанный
@@ -105,5 +111,5 @@ deps-update:
 
 .PHONY: install setup env dev start test test-coverage lint lint-fix routes \
 	generate-openapi generate-models generate-types generate-check \
-	lint-openapi migration-generate migration-check contract-test \
+	lint-openapi generate-operations migration-generate migration-check contract-test \
 	smoke-test deps-update

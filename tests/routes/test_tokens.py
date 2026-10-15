@@ -71,7 +71,7 @@ async def test_an_expired_token_is_rejected(client, app, user, session):
     expired = jwt.encode(
         {
             "id": user.id,
-            "exp": datetime.datetime.now(datetime.timezone.utc)
+            "exp": datetime.datetime.now(datetime.UTC)
             - datetime.timedelta(hours=1),
         },
         app.state.settings.jwt_secret,

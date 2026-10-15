@@ -1,15 +1,14 @@
 from typing import Annotated
 
 from fastapi import Header, HTTPException, Query, Response, status
-from sqlmodel import col, delete, func, select
+from sqlmodel import col, delete, select
 
 from app.db.models import Course, CourseLesson
 from app.dependencies import SessionDep
 from app.lib.changes import changes
 from app.lib.etag import ensure_matches, entity_tag
 from app.lib.identifiers import ResourceId
-from app.lib.pagination import Paging
-from app.lib.serialization import to_schema
+from app.lib.pagination import fetch_page
 from app.policies import CoursePolicy
 from app.security import CurrentUserDep
 from app.types.handlers.v1 import pydantic_gen as contract
@@ -54,20 +53,18 @@ async def index(
     session: SessionDep,
     query: Annotated[contract.CoursesIndexQuery, Query()],
 ) -> contract.CoursePage:
-    paging = Paging.of(query)
-    courses = (
-        await session.exec(
-            select(Course)
-            .order_by(col(Course.id))
-            .limit(paging.limit)
-            .offset(paging.offset)
-        )
-    ).all()
-    total = await session.scalar(select(func.count()).select_from(Course))
+    page = await fetch_page(
+        session, select(Course).order_by(col(Course.id)), query
+    )
 
     return contract.CoursePage(
-        data=[to_schema(contract.Course, course) for course in courses],
-        meta=paging.meta(total),
+        data=[
+            contract.Course.model_validate(
+                course, from_attributes=True, by_name=True
+            )
+            for course in page.items
+        ],
+        meta=contract.PageMeta.model_validate(page, from_attributes=True),
     )
 
 
@@ -78,7 +75,9 @@ async def show(
     # Метка версии ставится обработчиком, а не считается по телу ответа:
     # клиенту нужен валидатор, который он потом пришлёт в If-Match.
     response.headers["etag"] = entity_tag(course.updated_at)
-    return to_schema(contract.Course, course)
+    return contract.Course.model_validate(
+        course, from_attributes=True, by_name=True
+    )
 
 
 async def create(
@@ -92,7 +91,9 @@ async def create(
     session.add(course)
     await session.commit()
 
-    return to_schema(contract.Course, course)
+    return contract.Course.model_validate(
+        course, from_attributes=True, by_name=True
+    )
 
 
 async def replace(
@@ -114,7 +115,9 @@ async def replace(
         await session.refresh(course)
 
     response.headers["etag"] = entity_tag(course.updated_at)
-    return to_schema(contract.Course, course)
+    return contract.Course.model_validate(
+        course, from_attributes=True, by_name=True
+    )
 
 
 async def destroy(
@@ -136,12 +139,3 @@ async def destroy(
     await session.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-handlers = {
-    "coursesIndex": index,
-    "coursesShow": show,
-    "coursesCreate": create,
-    "coursesUpdate": replace,
-    "coursesDestroy": destroy,
-}

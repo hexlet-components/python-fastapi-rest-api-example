@@ -111,9 +111,9 @@ model PreconditionFailedError {
  */
 model PageMeta {
   page: int32;
-  perPage: int32;
+  size: int32;
   total: int32;
-  totalPages: int32;
+  pages: int32;
 }
 
 model User {
@@ -246,9 +246,9 @@ model TokenInfo {
 alias Page = {
   @query @minValue(1) @maxValue(2147483647) page?: int32 = 1,
 
-  // Потолок обязателен: без него запрос с perPage=1000000 заставляет
+  // Потолок обязателен: без него запрос с size=1000000 заставляет
   // базу собрать всю таблицу в один ответ.
-  @query @minValue(1) @maxValue(100) perPage?: int32 = 10,
+  @query @minValue(1) @maxValue(100) size?: int32 = 10,
 };
 
 /**

@@ -2,7 +2,8 @@ import os
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from limits import parse
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # .env не читается в тестах: иначе прогон начинает зависеть от локального
@@ -44,6 +45,10 @@ class Settings(BaseSettings):
     # процессе, поэтому значение вынесено в окружение, а не зашито в код.
     rate_limit: str = "100/minute"
 
+    # Где живут счётчики лимита. Память процесса считает по экземпляру;
+    # за несколькими экземплярами здесь адрес redis (redis://host:6379).
+    rate_limit_storage: str = "memory://"
+
     # Стоимость scrypt. Боевое значение считается сотни миллисекунд, а
     # сиды прогоняются на каждый подъём приложения в тестах, поэтому
     # цена выносится наружу. Внутри дайджеста она хранится своя, так что
@@ -53,6 +58,15 @@ class Settings(BaseSettings):
     # Трассировка включается только при заданном коллекторе.
     otel_exporter_otlp_endpoint: str | None = None
     otel_service_name: str = "python-fastapi-rest-api-example"
+
+    @field_validator("rate_limit")
+    @classmethod
+    def _rate_limit_is_parsable(cls, value: str) -> str:
+        # Строка лимита разбирается библиотекой лениво, на первом запросе:
+        # без проверки здесь опечатка в конфиге всплыла бы 500-й на
+        # боевом трафике, а не отказом на старте.
+        parse(value)
+        return value
 
 
 @lru_cache

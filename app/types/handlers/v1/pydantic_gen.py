@@ -83,9 +83,9 @@ class PageMeta(BaseModel):
     """
 
     page: int
-    per_page: int = Field(..., alias="perPage")
+    size: int
     total: int
-    total_pages: int = Field(..., alias="totalPages")
+    pages: int
 
 
 class CourseLessonPage(BaseModel):
@@ -183,7 +183,7 @@ class Versions(str, Enum):
 
 class CoursesIndexQuery(BaseModel):
     page: Optional[Annotated[int, Field(ge=1, le=2147483647)]] = 1
-    per_page: Optional[Annotated[int, Field(ge=1, le=100)]] = Field(default=10, alias="perPage")
+    size: Optional[Annotated[int, Field(ge=1, le=100)]] = 10
 
 
 class CoursesIndexResponse(RootModel[CoursePage]):
@@ -250,7 +250,7 @@ class CoursesLessonsIndexPath(BaseModel):
 
 class CoursesLessonsIndexQuery(BaseModel):
     page: Optional[Annotated[int, Field(ge=1, le=2147483647)]] = 1
-    per_page: Optional[Annotated[int, Field(ge=1, le=100)]] = Field(default=10, alias="perPage")
+    size: Optional[Annotated[int, Field(ge=1, le=100)]] = 10
 
 
 class CoursesLessonsIndexResponse(RootModel[CourseLessonPage]):
@@ -322,7 +322,7 @@ class TokensCreateResponse(RootModel[TokenInfo]):
 
 class UsersIndexQuery(BaseModel):
     page: Optional[Annotated[int, Field(ge=1, le=2147483647)]] = 1
-    per_page: Optional[Annotated[int, Field(ge=1, le=100)]] = Field(default=10, alias="perPage")
+    size: Optional[Annotated[int, Field(ge=1, le=100)]] = 10
 
 
 class UsersIndexResponse(RootModel[UserPage]):

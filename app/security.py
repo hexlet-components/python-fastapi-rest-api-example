@@ -1,23 +1,15 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Request, Security, status
+from fastapi import Depends, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import col, select
 
 from app.db.models import User
 from app.dependencies import SessionDep, SettingsDep
-from app.lib.problems import problem_response
+from app.lib.problems import Unauthorized
 from app.settings import Settings
-
-UNAUTHORIZED_HEADERS = {"WWW-Authenticate": "Bearer"}
-
-
-class Unauthorized(Exception):
-    def __init__(self, detail: str) -> None:
-        super().__init__(detail)
-        self.detail = detail
 
 
 class BearerAuth(HTTPBearer):
@@ -47,9 +39,7 @@ bearer_scheme = BearerAuth()
 
 
 def create_token(user_id: int, settings: Settings) -> str:
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=settings.jwt_expires_in
-    )
+    expires_at = datetime.now(UTC) + timedelta(seconds=settings.jwt_expires_in)
     return jwt.encode(
         {"id": user_id, "exp": expires_at},
         settings.jwt_secret,
@@ -88,11 +78,3 @@ async def current_user_id(
 
 
 CurrentUserDep = Annotated[int, Depends(current_user_id)]
-
-
-async def unauthorized_handler(request: Request, error: Unauthorized):
-    return problem_response(
-        status.HTTP_401_UNAUTHORIZED,
-        error.detail,
-        headers=UNAUTHORIZED_HEADERS,
-    )

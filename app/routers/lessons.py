@@ -1,14 +1,13 @@
 from typing import Annotated
 
 from fastapi import HTTPException, Query, Response, status
-from sqlmodel import col, func, select
+from sqlmodel import col, select
 
 from app.db.models import CourseLesson
 from app.dependencies import SessionDep
 from app.lib.changes import changes
 from app.lib.identifiers import ResourceId
-from app.lib.pagination import Paging
-from app.lib.serialization import to_schema
+from app.lib.pagination import fetch_page
 from app.policies import CoursePolicy
 from app.routers.courses import find_course
 from app.security import CurrentUserDep
@@ -57,26 +56,24 @@ async def index(
     course_id: CourseId,
     query: Annotated[contract.CoursesLessonsIndexQuery, Query()],
 ) -> contract.CourseLessonPage:
-    paging = Paging.of(query)
-    scope = col(CourseLesson.course_id) == course_id
-    lessons = (
-        await session.exec(
-            select(CourseLesson)
-            .where(scope)
-            .order_by(col(CourseLesson.id))
-            .limit(paging.limit)
-            .offset(paging.offset)
-        )
-    ).all()
-    # Счёт по тому же условию, что и выборка: total — это число уроков
-    # этого курса, а не всех.
-    total = await session.scalar(
-        select(func.count()).select_from(CourseLesson).where(scope)
+    # Общее число библиотека считает по тому же условию, что и выборку:
+    # total — это число уроков этого курса, а не всех.
+    page = await fetch_page(
+        session,
+        select(CourseLesson)
+        .where(col(CourseLesson.course_id) == course_id)
+        .order_by(col(CourseLesson.id)),
+        query,
     )
 
     return contract.CourseLessonPage(
-        data=[to_schema(contract.CourseLesson, lesson) for lesson in lessons],
-        meta=paging.meta(total),
+        data=[
+            contract.CourseLesson.model_validate(
+                lesson, from_attributes=True, by_name=True
+            )
+            for lesson in page.items
+        ],
+        meta=contract.PageMeta.model_validate(page, from_attributes=True),
     )
 
 
@@ -84,7 +81,9 @@ async def show(
     session: SessionDep, course_id: CourseId, lesson_id: LessonId
 ) -> contract.CourseLesson:
     lesson = await _find_lesson(session, course_id, lesson_id)
-    return to_schema(contract.CourseLesson, lesson)
+    return contract.CourseLesson.model_validate(
+        lesson, from_attributes=True, by_name=True
+    )
 
 
 async def create(
@@ -99,7 +98,9 @@ async def create(
     session.add(lesson)
     await session.commit()
 
-    return to_schema(contract.CourseLesson, lesson)
+    return contract.CourseLesson.model_validate(
+        lesson, from_attributes=True, by_name=True
+    )
 
 
 async def replace(
@@ -119,7 +120,9 @@ async def replace(
         await session.commit()
         await session.refresh(lesson)
 
-    return to_schema(contract.CourseLesson, lesson)
+    return contract.CourseLesson.model_validate(
+        lesson, from_attributes=True, by_name=True
+    )
 
 
 async def destroy(
@@ -135,12 +138,3 @@ async def destroy(
     await session.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-handlers = {
-    "coursesLessonsIndex": index,
-    "coursesLessonsShow": show,
-    "coursesLessonsCreate": create,
-    "coursesLessonsUpdate": replace,
-    "coursesLessonsDestroy": destroy,
-}

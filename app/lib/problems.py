@@ -1,67 +1,91 @@
 import logging
+from collections.abc import MutableMapping
 from http import HTTPStatus
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from starlette.exceptions import HTTPException as BaseHTTPException
-
-from app.types.handlers.v1.pydantic_gen import (
-    ProblemDetails,
-    UnprocessableEntityError,
-    UnprocessableEntityErrorErrors,
+from fastapi_problem.error import (
+    Problem,
+    ServerProblem,
+    StatusProblem,
+    UnauthorisedProblem,
+    UnprocessableProblem,
 )
+from fastapi_problem.handler import add_exception_handler, new_exception_handler
+from starlette.requests import Request
+
+from app.types.handlers.v1.pydantic_gen import UnprocessableEntityErrorErrors
 
 MEDIA_TYPE = "application/problem+json"
+
+# Тип проблемы — адрес описания статуса, как требует RFC 9457: без
+# шаблона библиотека отдала бы выдуманные «http-not-found».
+TYPE_URI = "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/{status}"
 
 logger = logging.getLogger(__name__)
 
 
-class ValidationProblemError(Exception):
+def _title(code: HTTPStatus) -> str:
+    return code.phrase
+
+
+class ValidationProblemError(UnprocessableProblem):
     """Нарушено правило предметной области.
 
-    Отдельно от HTTPException, потому что несёт список полей: клиенту
-    нужно знать, какое поле и по какому правилу не прошло.
+    Несёт список полей: клиенту нужно знать, какое поле и по какому
+    правилу не прошло. Форма элемента задана контрактом.
     """
+
+    title = _title(HTTPStatus.UNPROCESSABLE_CONTENT)
 
     def __init__(self, errors: list[UnprocessableEntityErrorErrors]) -> None:
-        super().__init__("Validation failed")
-        self.errors = errors
-
-
-class PreconditionFailed(HTTPException):
-    def __init__(self, detail: str) -> None:
         super().__init__(
-            status_code=status.HTTP_412_PRECONDITION_FAILED, detail=detail
+            "Errors related to business logic such as uniqueness",
+            errors=[_dump(error) for error in errors],
         )
 
 
-def problem_response(
-    status_code: int,
-    detail: str,
-    *,
-    errors: list[UnprocessableEntityErrorErrors] | None = None,
-    headers: dict[str, str] | None = None,
-) -> JSONResponse:
-    """Тело ошибки собирается по модели из контракта.
+class PreconditionFailed(StatusProblem):
+    status = HTTPStatus.PRECONDITION_FAILED
+    title = _title(HTTPStatus.PRECONDITION_FAILED)
 
-    Модели ошибок сгенерированы из спеки, поэтому ответ, который здесь
-    получится, описан в ней по построению.
+
+class TooManyRequests(StatusProblem):
+    status = HTTPStatus.TOO_MANY_REQUESTS
+    title = _title(HTTPStatus.TOO_MANY_REQUESTS)
+
+
+class Unauthorized(UnauthorisedProblem):
+    """401 с указанием схемы.
+
+    Отсутствие токена — не «нет прав» (403), а «не представились», и
+    клиенту нужно знать, чем подписываться.
     """
-    title = HTTPStatus(status_code).phrase
-    if errors is None:
-        body = ProblemDetails(status=status_code, title=title, detail=detail)
-    else:
-        body = UnprocessableEntityError(
-            status=status_code, title=title, detail=detail, errors=errors
-        )
 
-    return JSONResponse(
-        status_code=status_code,
-        content=body.model_dump(mode="json", exclude_none=True, by_alias=True),
-        media_type=MEDIA_TYPE,
-        headers=headers,
-    )
+    title = _title(HTTPStatus.UNAUTHORIZED)
+    headers_ = {"WWW-Authenticate": "Bearer"}  # noqa: RUF012
+
+
+class InternalError(ServerProblem):
+    """500, в тело которого не попадает ничего из исключения.
+
+    Библиотека по умолчанию кладёт в `detail` текст исключения, а он
+    может содержать что угодно, вплоть до фрагмента запроса к базе.
+    """
+
+    title = _title(HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def __init__(
+        self,
+        detail: str | None = None,
+        headers: MutableMapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(headers=headers)
+
+
+def _dump(error: UnprocessableEntityErrorErrors) -> dict[str, str]:
+    return error.model_dump(mode="json", exclude_none=True, by_alias=True)
 
 
 def _describe(error: dict) -> UnprocessableEntityErrorErrors:
@@ -75,56 +99,46 @@ def _describe(error: dict) -> UnprocessableEntityErrorErrors:
     )
 
 
+def _request_validation(
+    _handler: object, _request: Request, error: RequestValidationError
+) -> Problem:
+    return UnprocessableProblem(
+        "The request does not match the schema of the operation",
+        errors=[_dump(_describe(item)) for item in error.errors()],
+    )
+
+
+def to_response(problem: Problem) -> JSONResponse:
+    """Ответ для ошибки, возникшей вне обработчиков приложения.
+
+    Промежуточные слои стоят снаружи обработчиков исключений, и их
+    ошибки приходится отдавать самим — в том же формате.
+    """
+    return JSONResponse(
+        status_code=problem.status,
+        content=problem.marshal(uri=TYPE_URI, strict=True),
+        media_type=MEDIA_TYPE,
+        headers=problem.headers,
+    )
+
+
 def register_handlers(app: FastAPI) -> None:
     """Все ошибки приложения отдаются в одном формате.
 
-    Фреймворк по умолчанию рисует свои: `{"detail": ...}` у
-    HTTPException и `{"detail": [...]}` у проверки запроса. В контракте
-    же объявлен один тип тела на все ошибки, и обработчики приводят к
-    нему каждый исход.
+    Фреймворк по умолчанию рисует свои: `{"detail": ...}`. В контракте
+    же объявлен один тип тела на все ошибки. Обработчик библиотеки
+    стоит на базовых `HTTPException` Starlette (им бросает сам
+    фреймворк, например 400 на нечитаемом теле), на `Exception` и на
+    `Problem`.
     """
-
-    # Обработчик объявлен на базовом классе, а не на том, что
-    # предлагает fastapi: базовый фреймворк бросает сам — например, 400
-    # на нечитаемом теле запроса, — и обработчик, объявленный на
-    # наследнике, до такой ошибки не доходит. Она уезжала клиенту в
-    # формате по умолчанию, то есть в контракте её тело было описано
-    # неверно.
-    @app.exception_handler(BaseHTTPException)
-    async def http_exception(
-        request: Request, error: BaseHTTPException
-    ) -> Response:
-        return problem_response(
-            error.status_code,
-            str(error.detail),
-            headers=getattr(error, "headers", None),
-        )
-
-    @app.exception_handler(RequestValidationError)
-    async def request_validation(
-        request: Request, error: RequestValidationError
-    ) -> Response:
-        return problem_response(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            "The request does not match the schema of the operation",
-            errors=[_describe(item) for item in error.errors()],
-        )
-
-    @app.exception_handler(ValidationProblemError)
-    async def validation_problem(
-        request: Request, error: ValidationProblemError
-    ) -> Response:
-        return problem_response(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            "Errors related to business logic such as uniqueness",
-            errors=error.errors,
-        )
-
-    @app.exception_handler(Exception)
-    async def unhandled(request: Request, error: Exception) -> Response:
-        logger.exception("unhandled error", exc_info=error)
-        # Текст ошибки наружу не уходит: он может содержать что угодно,
-        # вплоть до фрагмента запроса к базе.
-        return problem_response(
-            status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal Server Error"
-        )
+    add_exception_handler(
+        app,
+        new_exception_handler(
+            logger=logger,
+            documentation_uri_template=TYPE_URI,
+            strict_rfc9457=True,
+            unhandled_wrappers={"500": InternalError},
+            request_validation_handler=_request_validation,
+        ),
+        generic_swagger_defaults=False,
+    )

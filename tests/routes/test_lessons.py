@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlmodel import col
 
 from app.db.models import Course, CourseLesson
 from app.lib.data import build_lesson
@@ -14,7 +15,7 @@ async def test_index_counts_only_the_lessons_of_this_course(
     рассчитывает страницы по чужим данным.
     """
     other = await session.scalar(
-        select(Course).where(Course.id != lesson.course_id)
+        select(Course).where(col(Course.id) != lesson.course_id)
     )
 
     res = await client.get(f"/courses/{lesson.course_id}/lessons")
@@ -44,7 +45,7 @@ async def test_show_a_lesson_of_another_course(client, lesson, session):
     курса, не существует.
     """
     other = await session.scalar(
-        select(Course).where(Course.id != lesson.course_id)
+        select(Course).where(col(Course.id) != lesson.course_id)
     )
 
     res = await client.get(f"/courses/{other.id}/lessons/{lesson.id}")

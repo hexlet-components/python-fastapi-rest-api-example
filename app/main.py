@@ -1,10 +1,12 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import secure
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app import observability
 from app.contract import VERSIONS, document
@@ -15,10 +17,11 @@ from app.db.session import (
 )
 from app.glue import register_operations
 from app.lib.problems import register_handlers
-from app.middleware import ETagMiddleware, RateLimitMiddleware
+from app.lib.rate_limit import create_limiter, too_many_requests
+from app.middleware import ETagMiddleware
 from app.routers import index as v1
 from app.routers.v2 import index as v2
-from app.security import Unauthorized, current_user_id, unauthorized_handler
+from app.security import current_user_id
 from app.settings import Settings, get_settings
 from app.telemetry import setup_telemetry
 
@@ -43,7 +46,7 @@ SECURITY_HEADERS = secure.Secure(
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings: Settings = app.state.settings
     engine = create_engine(settings)
     await migrate(engine)
@@ -87,9 +90,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     register_handlers(app)
-    app.add_exception_handler(Unauthorized, unauthorized_handler)
 
-    app.add_middleware(RateLimitMiddleware, rate_limit=settings.rate_limit)
+    app.state.limiter = create_limiter(settings)
+    app.add_exception_handler(RateLimitExceeded, too_many_requests)
+    app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(ETagMiddleware)
     app.add_middleware(
         CORSMiddleware,
