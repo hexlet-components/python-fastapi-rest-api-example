@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
@@ -47,9 +47,7 @@ bearer_scheme = BearerAuth()
 
 
 def create_token(user_id: int, settings: Settings) -> str:
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=settings.jwt_expires_in
-    )
+    expires_at = datetime.now(UTC) + timedelta(seconds=settings.jwt_expires_in)
     return jwt.encode(
         {"id": user_id, "exp": expires_at},
         settings.jwt_secret,
@@ -90,7 +88,10 @@ async def current_user_id(
 CurrentUserDep = Annotated[int, Depends(current_user_id)]
 
 
-async def unauthorized_handler(request: Request, error: Unauthorized):
+async def unauthorized_handler(request: Request, error: Exception):
+    # Фреймворк передаёт обработчику базовый Exception: тип ошибки он
+    # выбирает по регистрации, а не по сигнатуре.
+    assert isinstance(error, Unauthorized)  # noqa: S101
     return problem_response(
         status.HTTP_401_UNAUTHORIZED,
         error.detail,

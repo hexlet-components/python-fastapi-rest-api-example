@@ -31,6 +31,7 @@ test-coverage:
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
+	uv run ty check
 	$(MAKE) lint-openapi
 
 lint-fix:

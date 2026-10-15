@@ -21,7 +21,7 @@ class Paging:
     per_page: int
 
     @classmethod
-    def of(cls, query: PageQuery) -> "Paging":
+    def of(cls, query: PageQuery) -> Paging:
         return cls(page=query.page or 1, per_page=query.per_page or 10)
 
     @property

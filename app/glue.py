@@ -1,11 +1,14 @@
-from typing import Any, Callable
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from fastapi import FastAPI, Response, Security
 
 from app.contract import document
 
-Handlers = dict[str, Callable[..., Any]]
-SecurityHandlers = dict[str, Callable[..., Any]]
+# Mapping, а не dict: значения у него ковариантны, поэтому набор
+# обработчиков версии с узкими сигнатурами проходит как набор вообще.
+Handlers = Mapping[str, Callable[..., Any]]
+SecurityHandlers = Mapping[str, Callable[..., Any]]
 
 
 def _response_model(handler: Callable[..., Any], status: int):

@@ -1,6 +1,9 @@
-from typing import Annotated
+from collections.abc import Sequence
+from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, Response, status
+from sqlalchemy import select as select_columns
+from sqlalchemy.orm import Mapped
 from sqlmodel import col, delete, func, select, update
 
 from app.db.models import Course, User
@@ -17,7 +20,11 @@ from app.validators import users as validator
 UserId = ResourceId
 
 
-async def find_public_user(session: SessionDep, user_id: int, columns=None):
+async def find_public_user(
+    session: SessionDep,
+    user_id: int,
+    columns: Sequence[Mapped[Any]] | None = None,
+):
     """Пользователь в публичной проекции.
 
     Проекция вместо строки целиком: рядом лежит password_digest, и
@@ -25,9 +32,13 @@ async def find_public_user(session: SessionDep, user_id: int, columns=None):
     Набор колонок передаётся аргументом — у второй версии контракта он
     свой.
     """
+    # Набор колонок задан списком, а у select из sqlmodel перегрузки
+    # на фиксированное число: список даёт select из sqlalchemy. Он же
+    # исполняется через соединение: session.execute у sqlmodel помечен
+    # устаревшим, потому что для моделей есть exec, а здесь строки.
     row = (
-        await session.exec(
-            select(*(columns or PUBLIC_USER_COLUMNS)).where(
+        await (await session.connection()).execute(
+            select_columns(*(columns or PUBLIC_USER_COLUMNS)).where(
                 col(User.id) == user_id
             )
         )
@@ -38,7 +49,7 @@ async def find_public_user(session: SessionDep, user_id: int, columns=None):
 
 
 async def count_users(session: SessionDep) -> int:
-    return await session.scalar(select(func.count()).select_from(User))
+    return await session.scalar(select(func.count()).select_from(User)) or 0
 
 
 async def index(

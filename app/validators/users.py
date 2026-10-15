@@ -1,15 +1,25 @@
+from typing import Protocol
+
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.models import User
 from app.lib.problems import ValidationProblemError
 from app.rules.unique import is_unique
-from app.types.handlers.v1.pydantic_gen import (
-    UnprocessableEntityErrorErrors,
-    UserCreateDto,
-)
+from app.types.handlers.v1.pydantic_gen import UnprocessableEntityErrorErrors
 
 
-async def validate_create(session: AsyncSession, data: UserCreateDto) -> None:
+class UserCreate(Protocol):
+    """Что правилам нужно от тела создания.
+
+    Тела первой и второй версий — разные сгенерированные модели без
+    общего предка. Правила читают только адрес, поэтому принимают всё,
+    где он есть.
+    """
+
+    email: str
+
+
+async def validate_create(session: AsyncSession, data: UserCreate) -> None:
     """Правила предметной области, а не структура запроса.
 
     Структуру уже проверила схема операции, сгенерированная из

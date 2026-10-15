@@ -10,10 +10,10 @@ import os
 
 os.environ.setdefault("JWT_SECRET", "routes-listing-only-secret-0123456789")
 
-from fastapi.routing import iter_route_contexts  # noqa: E402
+from fastapi.routing import iter_route_contexts
 
-from app.contract import VERSIONS, document  # noqa: E402
-from app.main import create_app  # noqa: E402
+from app.contract import VERSIONS, document
+from app.main import create_app
 
 
 def main() -> None:

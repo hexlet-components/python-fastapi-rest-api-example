@@ -17,15 +17,16 @@ os.environ.setdefault("SCRYPT_COST", "1024")
 # задрать: иначе тест, шлющий много запросов, начинает ловить 429.
 os.environ.setdefault("RATE_LIMIT", "100000/minute")
 
-import pytest  # noqa: E402
-from httpx import ASGITransport, AsyncClient  # noqa: E402
-from sqlalchemy import select  # noqa: E402
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+from sqlmodel import col
 
-from app.db.models import Course, CourseLesson, User  # noqa: E402
-from app.lib.data import DEFAULT_PASSWORD  # noqa: E402
-from app.main import create_app  # noqa: E402
-from app.security import create_token  # noqa: E402
-from app.settings import Settings  # noqa: E402
+from app.db.models import Course, CourseLesson, User
+from app.lib.data import DEFAULT_PASSWORD
+from app.main import create_app
+from app.security import create_token
+from app.settings import Settings
 
 MISSING_ID = 999_999
 
@@ -124,7 +125,9 @@ async def outsider(session):
     """
 
     async def find(owner_id: int) -> User:
-        users = (await session.scalars(select(User).order_by(User.id))).all()
+        users = (
+            await session.scalars(select(User).order_by(col(User.id)))
+        ).all()
         return next(user for user in users if user.id != owner_id)
 
     return find

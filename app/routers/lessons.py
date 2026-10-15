@@ -70,9 +70,11 @@ async def index(
     ).all()
     # Счёт по тому же условию, что и выборка: total — это число уроков
     # этого курса, а не всех.
-    total = await session.scalar(
-        select(func.count()).select_from(CourseLesson).where(scope)
-    )
+    total = (
+        await session.scalar(
+            select(func.count()).select_from(CourseLesson).where(scope)
+        )
+    ) or 0
 
     return contract.CourseLessonPage(
         data=[to_schema(contract.CourseLesson, lesson) for lesson in lessons],

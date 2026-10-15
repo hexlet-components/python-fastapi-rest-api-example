@@ -1,3 +1,5 @@
+from sqlmodel import col
+
 from app.db.models import User
 
 # Публичная проекция пользователя: в строке лежит password_digest, и без
@@ -12,9 +14,9 @@ from app.db.models import User
 # Проекций две, по одной на версию контракта: phone добавлен в User
 # только со второй.
 PUBLIC_USER_COLUMNS = (
-    User.id,
-    User.full_name,
-    User.email,
+    col(User.id),
+    col(User.full_name),
+    col(User.email),
 )
 
-PUBLIC_USER_COLUMNS_V2 = (*PUBLIC_USER_COLUMNS, User.phone)
+PUBLIC_USER_COLUMNS_V2 = (*PUBLIC_USER_COLUMNS, col(User.phone))

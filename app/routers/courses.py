@@ -63,7 +63,9 @@ async def index(
             .offset(paging.offset)
         )
     ).all()
-    total = await session.scalar(select(func.count()).select_from(Course))
+    total = (
+        await session.scalar(select(func.count()).select_from(Course))
+    ) or 0
 
     return contract.CoursePage(
         data=[to_schema(contract.Course, course) for course in courses],

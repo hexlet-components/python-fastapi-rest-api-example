@@ -89,7 +89,7 @@ class ETagMiddleware:
     def _weak_tag(body: bytes) -> str:
         # Валидатор слабый: сравнение идёт по содержимому ответа, а не по
         # точному представлению, и заголовки в него не входят.
-        return f'W/"{hashlib.sha1(body).hexdigest()}"'
+        return f'W/"{hashlib.sha1(body, usedforsecurity=False).hexdigest()}"'
 
 
 WINDOWS = {"second": 1, "minute": 60, "hour": 3600}

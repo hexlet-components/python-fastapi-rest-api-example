@@ -22,10 +22,11 @@ async def create(
     # Один и тот же ответ на «нет такого адреса» и «неверный пароль»:
     # иначе операция превращается в проверку того, зарегистрирован ли
     # адрес.
-    valid = user is not None and await verify_password(
-        data.password, user.password_digest
-    )
-    if not valid:
+    if (
+        user is None
+        or user.id is None
+        or not await verify_password(data.password, user.password_digest)
+    ):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Invalid email or password",

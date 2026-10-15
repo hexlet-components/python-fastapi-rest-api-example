@@ -5,7 +5,9 @@ from pydantic import BaseModel
 Schema = TypeVar("Schema", bound=BaseModel)
 
 
-def to_schema(schema: type[Schema], row: Any, **extra: Any) -> Schema:
+def to_schema[Schema: BaseModel](
+    schema: type[Schema], row: Any, **extra: Any
+) -> Schema:
     """Строка базы в модель контракта.
 
     Поля берутся по именам, объявленным в модели, и подставляются под
