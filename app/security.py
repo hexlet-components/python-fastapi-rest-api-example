@@ -2,7 +2,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Request, Security
+from fastapi import Depends, Security
+from fastapi.requests import HTTPConnection
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import col, select
 
@@ -28,7 +29,9 @@ class BearerAuth(HTTPBearer):
     def __init__(self) -> None:
         super().__init__(auto_error=False)
 
-    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials:
+    async def __call__(
+        self, request: HTTPConnection
+    ) -> HTTPAuthorizationCredentials:
         credentials = await super().__call__(request)
         if credentials is None:
             raise Unauthorized("Authorization header with a bearer token")
