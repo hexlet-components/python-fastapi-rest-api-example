@@ -1,0 +1,12 @@
+# GITHUB_TOKEN берётся из окружения и снимает лимит запросов github.com.
+max_concurrency = 8
+max_retries = 3
+retry_wait_time = 5
+timeout = 30
+cache = true
+max_cache_age = "1d"
+accept = ["200..=204", "429"]
+exclude_path = ["LICENSE", "node_modules", "vendor", "CHANGELOG.md"]
+# npmjs.com отвечает CI кодом 403 (защита от ботов), в браузере ссылки живые.
+# Репозиторий генератора hey-api/openapi-python в TODO.md пока не открыт.
+exclude = ["^https://www.npmjs.com/", "^https://github.com/hey-api/openapi-python$", "^https?://localhost", "^https?://(www\\.)?linkedin\\.com/", "^https?://127\\.0\\.0\\.1"]
